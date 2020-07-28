@@ -2,7 +2,7 @@
 
 a simple block world demo written in swift on OpenGLES compatible with macOS and RaspberryPI
 
-![a screenshot](screenshot.png)!
+![a screenshot](screenshot.png)
 
 borrows ideas from
 * www.swiftgl.org - OpenGL tutorial in Swift
