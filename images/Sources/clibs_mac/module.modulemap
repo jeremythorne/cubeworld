@@ -1,0 +1,11 @@
+module GLFW [system] {
+    header "/usr/local/include/GLFW/glfw3.h"
+    link "glfw"
+    export *
+}
+
+module CLIBPNG [system] {
+    header "/usr/local/include/libpng16/png.h"
+    link "png16"
+    export *
+}
