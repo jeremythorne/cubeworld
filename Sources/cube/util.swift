@@ -160,7 +160,7 @@ func loadImage(filename:String) -> Image?
 func enableAttrib(loc:GLint, num:Int, off:Int, stride:Int)
 {
     glEnableVertexAttribArray(GLuint(loc))
-    glVertexAttribPointer(GLuint(loc), GLint(num), GLenum(GL_BYTE), GLboolean(GL_FALSE),
+    glVertexAttribPointer(GLuint(loc), GLint(num), GLenum(GL_UNSIGNED_BYTE), GLboolean(GL_FALSE),
                             GLsizei(MemoryLayout<GLbyte>.size * stride),
                                        UnsafeRawPointer(bitPattern: MemoryLayout<GLbyte>.size * off))
 }

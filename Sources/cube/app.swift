@@ -173,12 +173,6 @@ class App {
         game.draw(viewProjection:vp)
     }
 
-    func worldSize() -> Vec3 {
-        return Vec3(x:Double(world.worldWidth),
-                    y:Double(world.worldHeight), 
-                    z:Double(world.worldDepth))
-    }
-
     func setCamera(p:Vec3, az:Double) {
         px = p.x
         py = p.y
@@ -191,11 +185,7 @@ class App {
     }
 
     func mapHeight(x:Double, z:Double) -> Double {
-        if x < 0 || Int(x) >= world.worldWidth ||
-            z < 0 || Int(z) >= world.worldDepth {
-                return 0
-            }
-        return Double(world.map[Int(x)][Int(z)])
+        return Double(world.heightMap(Int(x), Int(z)))
     }
 
     func loop()

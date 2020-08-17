@@ -4,7 +4,7 @@
   import GL
 #endif
 
-var cube: [[[GLbyte]]] = [
+var cubeverts: [[[GLubyte]]] = [
      [ // front
      [0, 0, 1,  1, 1],
      [1, 0, 1,  0, 1], 
@@ -101,41 +101,63 @@ struct Cube {
 
 class Chunk {
     var vertex_buffer: [GLuint] = [0, 0, 0, 0, 0, 0]
-    var bytes:[[GLbyte]] = [[], [], [], [], [], []]
+    var bytes:[[GLubyte]] = [[], [], [], [], [], []]
     var cubes:[[[Cube]]]
     var vertex_count:Int = 0
     var xoff:Int
     var zoff:Int
-    var height:Int
+    var height:Int = 256
 
-    init(xoff:Int, zoff:Int, world:[[[CubeType]]]) {
+    init(xoff:Int, zoff:Int, map:(Int, Int) -> Int) {
         self.xoff = xoff
         self.zoff = zoff
-        let width = world[0].count
-        let depth = world.count
-        height = world[0][0].count
         let sky = Cube()
         cubes = [[[Cube]]](repeating:[[Cube]](repeating:[Cube](repeating:sky, count: height), count:16), count:16)
 
         func occluded(_ x:Int, _ y:Int, _ z:Int) -> Bool {
-            if x == 0 || x == (width - 1) || z == 0 || z == (depth - 1) || y == 0 || y == (height - 1) ||
-                   world[z - 1][x][y] == .sky ||
-                   world[z + 1][x][y] == .sky ||
-                   world[z][x - 1][y] == .sky ||
-                   world[z][x + 1][y] == .sky ||
-                   world[z][x][y - 1] == .sky ||
-                   world[z][x][y + 1] == .sky {
-                       // not completely occluded
-                       return false
+            if x == 0 || x == 15 || z == 0 || z == 15 || y == 0 || y == height - 1 {
+                return false
+            }
+            if cubes[z + 1][x][y].type == .sky ||
+               cubes[z - 1][x][y].type == .sky ||
+               cubes[z][x + 1][y].type == .sky ||
+               cubes[z][x - 1][y].type == .sky ||
+               cubes[z][x][y + 1].type == .sky ||
+               cubes[z][x][y - 1].type == .sky {
+                   return false
             }
             return true
         }
 
-        for z in zoff..<(zoff + 16) {
-            for x in xoff..<(xoff + 16) {
+        for z in 0..<16 {
+            for x in 0..<16 {
+                var h = map(x + xoff, z + zoff)
+                if h < 6 {
+                    h = 6
+                }
+                for y in 0...h {
+                    let t:CubeType
+                    switch y {
+                    case 0..<h:
+                        t = .stone
+                    case h:
+                        if h <= 6 {
+                            t = .water
+                        }else {
+                            t = .grass
+                        }
+                    default:
+                        t = .sky
+                    }
+                    cubes[z][x][y].type = t
+                }
+            }
+        }
+
+        for z in 0..<16 {
+            for x in 0..<16 {
                 for y in 0..<height {
-                    cubes[z - zoff][x - xoff][y].type = world[z][x][y]
-                    cubes[z - zoff][x - xoff][y].occluded = occluded(x, y, z)
+                    cubes[z][x][y].occluded = occluded(x, y, z)
                 }
             }
         }
@@ -166,15 +188,15 @@ class Chunk {
     func addCubeVertices(x:Int, y:Int, z:Int, type:CubeType)
     {
         // vertex must fix in a byte
-        assert(x >= -128 && x < 127)
-        assert(y >= -128 && y < 127)
-        assert(z >= -128 && z < 127)
-        let tv = GLbyte(type.rawValue - 1)
+        assert(x >= 0 && x < 255)
+        assert(y >= 0 && y < 255)
+        assert(z >= 0 && z < 255)
+        let tv = GLubyte(type.rawValue - 1)
         for i in 0..<6 {
-            var verts = [[GLbyte]]()
+            var verts = [[GLubyte]]()
             for j in 0..<4 {
-                let v = cube[i][j]
-                verts.append([v[0] + GLbyte(x), v[1] + GLbyte(y), v[2] + GLbyte(z), v[3], v[4] + tv])
+                let v = cubeverts[i][j]
+                verts.append([v[0] + GLubyte(x), v[1] + GLubyte(y), v[2] + GLubyte(z), v[3], v[4] + tv])
             }
 
             for j in [0, 1, 2, 0, 2, 3] {
@@ -198,9 +220,7 @@ class Chunk {
 
 class World {
 
-    let worldWidth = 128
-    let worldHeight = 16
-    let worldDepth = 128
+    let worldSeed = Int.random(in:1...Int.max)
     var program:GLuint = 0
     var pos_location:GLint = 0
     var normal_location:GLint = 0 
@@ -244,95 +264,24 @@ class World {
         let image = loadImage(filename:"images/hello.png")!
         glBindTexture(GLenum(GL_TEXTURE_2D), image.texture)
         
-        makeWorld(width:worldWidth, depth:worldDepth, height:worldHeight)
+        makeWorld()
         return true
     }
 
-    func heightMap(width:Int, depth:Int, height:Int) -> [[Int]]
+    func heightMap(_ x:Int, _ z:Int) -> Int
     {
-        func is_power_of_two(_ a:Int) -> Bool
-        {
-            return a > 0 && (a & (a - 1)) == 0
-        }
-
-        assert(is_power_of_two(width - 1))
-        assert(width == depth)
-        // this algorithm only works if width and depth are 2^n + 1
-        var h = [[Int]](repeating:[Int](repeating:0, count: depth), count: width)
-        func diamondSquare(s:Int, n:Int)
-        {
-            let m = s / 2
-            let n2 = n / 2
-            for x in stride(from: 0, to: width - s, by: s) {
-                for y in stride(from: 0, to: depth - s, by: s) {
-                    h[x + m][y + m] = max(1, min(height, (h[x][x] + 
-                                                          h[x + s][y + s] +
-                                                          h[x + s][y] +
-                                                          h[x][y + s]) / 4 + Int.random(in:-n2...n2)))
-                    h[x + m][y] = max(1, min(height, (h[x][y] + h[x + s][y]) / 2 + Int.random(in:-n2...n2)))
-                    h[x + m][y + s] = max(1, min(height, (h[x][y + s] + h[x + s][y + s]) / 2 + Int.random(in:-n2...n2))) 
-                    h[x][y + m] = max(1, min(height, (h[x][y] + h[x][y + s]) / 2 + Int.random(in:-n2...n2)))
-                    h[x + s][y + m] = max(1, min(height, (h[x + s][y] + h[x + s][y + s]) / 2 + Int.random(in:-n2...n2)))
-            
-                }
-            }
-        }
-
-        var n = height
-        h[0][0] = Int.random(in:1...n) 
-        h[0][depth - 1] = Int.random(in:1...n) 
-        h[width - 1][0] = Int.random(in:1...n) 
-        h[width - 1][depth - 1] = Int.random(in:1...n)
-        var s = width - 1
-        while s > 1 {
-            n /= 2
-            diamondSquare(s:s, n:n)
-            s /= 2
-        }
-        return h
+        return Int(noise8_2d(seed: worldSeed, x, z) >> 3)
     }
 
-    func makeWorld(width:Int, depth:Int, height:Int)
+    func makeWorld()
     {
-        
-        var world = [[[CubeType]]](repeating:[[CubeType]](repeating:[CubeType](repeating:.sky, count: height), count:width), count:depth)
-
-        map = heightMap(width:width + 1, depth:depth + 1, height:height)
-
-        for z in 0..<depth {
-            for x in 0..<width {
-                var h = map[x][z]
-                if h < 6 {
-                    h = 6
-                    map[x][z] = 6
-                }
-                for y in 0..<height {
-                    let t:CubeType
-                    switch y {
-                    case 0..<h:
-                        t = .stone
-                    case h:
-                        if h <= 6 {
-                            t = .water
-                        }else {
-                            t = .grass
-                        }
-                    default:
-                        t = .sky
-                    }
-                    world[z][x][y] = t
-                }
-            }
-        }
-
-        for i in 0..<(depth/16) {
+        for i in -2...2 {
             chunks.append([Chunk]())
-            for j in 0..<(width/16) {
+            for j in -2...2 {
                 print("chunk \(i),\(j)")
-                chunks[i].append(Chunk(xoff:j * 16, zoff:i * 16, world:world))
+                chunks[i + 2].append(Chunk(xoff:j * 16, zoff:i * 16, map:heightMap))
             }
         } 
-
     }
 
     func draw(vp:Mat4)

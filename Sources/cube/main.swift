@@ -20,7 +20,6 @@ class WalkAnimation {
 }
 
 class MyGame : Game {
-    var worldSize = Vec3()
     var p = Vec3()
     var pa:Double = 0
     var timer:Double = 0
@@ -28,20 +27,19 @@ class MyGame : Game {
     var walk = WalkAnimation()
 
     override func setup() {
-        worldSize = app.worldSize()
     }
 
     override func update() {
         switch state {
         case .demo:
             pa += 0.01
-            p.x = worldSize.x / 2 + 40 * cos(pa)
-            p.z = worldSize.z / 2 + 40 * sin(pa)
-            p.y = worldSize.y
+            p.x = 40 * cos(pa)
+            p.z = 40 * sin(pa)
+            p.y = 32
             if app.keyPressed(key:.Space) {
                 state = .play
-                p.x = worldSize.x / 2
-                p.z = worldSize.z / 2
+                p.x = 0
+                p.z = 0
                 timer = 0
             }
         case .play:
@@ -63,8 +61,6 @@ class MyGame : Game {
             if moving {
                 timer += 1.0 / 60
             }
-            p.x = (min(worldSize.x, max(0, p.x)))
-            p.z = (min(worldSize.z, max(0, p.z)))
             p.y = app.mapHeight(x:p.x,z:p.z) + 2.5
         }
         let camera = p + walk.get(timer:timer)

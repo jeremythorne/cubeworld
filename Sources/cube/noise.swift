@@ -1,6 +1,6 @@
 
 func noise8_2d(seed:Int, _ x:Int, _ y:Int) -> UInt8 {
-    let h = hash(seed + 1 << 16) // keep away from 0
+    let h = seed
     var n:UInt8 = 0
     for i in 1...4 {
         let li = x >> i
@@ -24,7 +24,7 @@ func noise8_2d(seed:Int, _ x:Int, _ y:Int) -> UInt8 {
 }
 
 func noise8(seed:Int, _ x:Int) -> UInt8 {
-    let h = hash(seed + 1 << 16) // keep away from 0
+    let h = seed
     var n:UInt8 = 0
     for i in 1...4 {
         let li = x >> i
@@ -54,38 +54,4 @@ func xorshift32 (seed: UInt32) -> UInt32 {
     x ^= x << 5
     return x
 }
-
-let seed = Int.random(in:0...Int.max)
-/*
-var x = 0
-while true {
-    let v = noise8(seed:seed, x) / 2
-    var line:[Character] = []
-    for _ in 0..<v {
-        line += "-"
-    }
-    line += "+"
-    print(String(line))
-    x += 1
-}*/
-var y = 0
-while true {
-    var line:[Character] = []
-    for x in 0...120 {
-        let v = noise8_2d(seed:seed, x + 1000, y)
-        switch v {
-        case 0..<64:
-            line += " "
-        case 64..<128:
-            line += "-"
-        case 128..<192:
-            line += "+"
-        default:
-            line += "*"
-        }
-    }
-    print(String(line))
-    y += 1
-}
-
 
