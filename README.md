@@ -14,3 +14,5 @@ borrows ideas from
 * https://gamedev.stackexchange.com/questions/17171/for-voxel-rendering-what-is-more-efficient-pre-made-vbo-or-a-geometry-shader
 * https://stackoverflow.com/questions/8142388/in-what-order-should-i-send-my-vertices-to-opengl-for-culling
 * https://web.mit.edu/cesium/Public/terrain.pdf - terrain generation
+* https://www.youtube.com/watch?v=Nj8gt_92c-M - I Made Minecraft in 24 Hours
+* https://www.youtube.com/watch?v=Xq3isov6mZ8 - Coding Minecraft in One Week - C++/OpenGL Programming Challenge
