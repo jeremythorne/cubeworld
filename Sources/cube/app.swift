@@ -159,7 +159,7 @@ class App {
     func update()
     {
         game.update()
-
+        world.loadChunks(x:Int(px), z:Int(pz))
     }
 
     func draw()

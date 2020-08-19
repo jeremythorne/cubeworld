@@ -218,7 +218,13 @@ class Chunk {
 
 }
 
+struct ChunkPos : Hashable {
+    var x:Int
+    var z:Int
+}
+
 class World {
+
 
     let worldSeed = Int.random(in:1...Int.max)
     var program:GLuint = 0
@@ -227,7 +233,7 @@ class World {
     var tex_coord_location:GLint = 0
     var mvp_location:GLint = 0 
     var map = [[Int]]()
-    var chunks = [[Chunk]]()
+    var chunks = [ChunkPos:Chunk]()
         
     func setup() -> Bool
     {
@@ -264,23 +270,39 @@ class World {
         let image = loadImage(filename:"images/hello.png")!
         glBindTexture(GLenum(GL_TEXTURE_2D), image.texture)
         
-        makeWorld()
+        loadChunks(x:0, z:0)
         return true
     }
 
     func heightMap(_ x:Int, _ z:Int) -> Int
     {
-        return Int(noise8_2d(seed: worldSeed, x, z) >> 3)
+        return Int(noise8_2d(seed: worldSeed, x / 2, z / 2) >> 3)
     }
 
-    func makeWorld()
+    func loadChunks(x:Int, z:Int)
     {
-        for i in -2...2 {
-            chunks.append([Chunk]())
-            for j in -2...2 {
-                print("chunk \(i),\(j)")
-                chunks[i + 2].append(Chunk(xoff:j * 16, zoff:i * 16, map:heightMap))
+        let cx = x / 16
+        let cz = z / 16
+        for i in (cx - 2)...(cx + 2) {
+            for j in (cz - 2)...(cz + 2) {
+                let pos = ChunkPos(x:i, z:j)
+                if chunks[pos] == nil {
+                    print("chunk \(i),\(j)")
+                    chunks[pos] = Chunk(xoff:i * 16, zoff:j * 16, map:heightMap)
+                }
             }
+        }
+
+        if chunks.count > 64 {
+           for pos in chunks.keys {
+               let diff = abs(cx - pos.x) + abs(cz - pos.z)
+               if diff > 8 {
+                   chunks[pos] = nil
+               }
+               if chunks.count < 64 {
+                   break
+               }
+           }
         } 
     }
 
@@ -288,10 +310,8 @@ class World {
     {
         glUseProgram(program)
 
-        for i in 0..<chunks.count {
-            for j in 0..<chunks[i].count {
-                drawChunk(vp:vp, chunk:chunks[i][j])
-            }
+        for chunk in chunks.values {
+            drawChunk(vp:vp, chunk:chunk)
         }
     }
 
