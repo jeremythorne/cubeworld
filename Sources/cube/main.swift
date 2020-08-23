@@ -20,8 +20,9 @@ class WalkAnimation {
 }
 
 class MyGame : Game {
-    var p = Vec3()
-    var pa:Double = 0
+    var p = Camera()
+    var mouse:Vec3?
+    let pi = 3.1416
     var timer:Double = 0
     var state = State.demo
     var walk = WalkAnimation()
@@ -32,40 +33,60 @@ class MyGame : Game {
     override func update() {
         switch state {
         case .demo:
-            pa += 0.01
-            p.x = 40 * cos(pa)
-            p.z = 40 * sin(pa)
-            p.y = 32
+            p.ay += 0.01
+            p.ax = -pi / 4
+            p.pos.x = 40 * cos(p.ay)
+            p.pos.z = 40 * sin(p.ay)
+            p.pos.y = 32
             if app.keyPressed(key:.Space) {
                 state = .play
-                p.x = 0
-                p.z = 0
+                p.pos.x = 0
+                p.pos.z = 0
+                p.ay = 0
+                p.ax = 0
                 timer = 0
             }
         case .play:
             var moving = false
-            if app.keyPressed(key:.Left) {
-                pa -= 0.01
-            } else if app.keyPressed(key:.Right) {
-                pa += 0.01
+            if app.keyPressed(key:.Left) || app.keyPressed(key:.a) {
+                p.pos.x -= 0.1 * cos(p.ay)
+                p.pos.z -= 0.1 * sin(p.ay)
+                moving = true
+            } else if app.keyPressed(key:.Right) || app.keyPressed(key:.d){
+                p.pos.x += 0.1 * cos(p.ay)
+                p.pos.z += 0.1 * sin(p.ay)
+                moving = true
             }
-            if app.keyPressed(key:.Up) {
-                p.x -= 0.1 * cos(pa)
-                p.z -= 0.1 * sin(pa)
+            if app.keyPressed(key:.Up) || app.keyPressed(key:.w) {
+                p.pos.x += 0.1 * sin(p.ay)
+                p.pos.z -= 0.1 * cos(p.ay)
                 moving = true
-            } else if app.keyPressed(key:.Down) {
-                p.x += 0.1 * cos(pa)
-                p.z += 0.1 * sin(pa)
+            } else if app.keyPressed(key:.Down) || app.keyPressed(key:.s) {
+                p.pos.x -= 0.1 * sin(p.ay)
+                p.pos.z += 0.1 * cos(p.ay)
                 moving = true
+            }
+            if let app_mouse = app.mouse {
+                if let m = mouse {
+                    if app_mouse.x != m.x {
+                        p.ay += (app_mouse.x - m.x) / 200
+                    }
+                    if app_mouse.y != m.y {
+                        p.ax -= (app_mouse.y - m.y) / 200
+                        p.ax = max(-pi / 2, min(pi / 2, p.ax))
+                    }
+                }
+                mouse = app_mouse
             }
             if moving {
                 timer += 1.0 / 60
             }
-            p.y = app.mapHeight(x:p.x,z:p.z) + 2.5
+            p.pos.y = app.mapHeight(x:p.pos.x,z:p.pos.z) + 2.5
         }
-        let camera = p + walk.get(timer:timer)
+        var camera = p
+        camera.pos = camera.pos + walk.get(timer:timer)
 
-        app.setCamera(p:camera, az:pa)
+        app.setCamera(camera)
     }
 
     override func draw(viewProjection:Mat4) {

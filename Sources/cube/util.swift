@@ -83,11 +83,18 @@ class Mat4 {
         a[14] = t.z
     }
 
+    init(rotatex rad:Double) {
+        a[5] = cos(rad)
+        a[6] = -sin(rad)
+        a[9] = sin(rad)
+        a[10] = cos(rad)
+    }
+
     init(rotatey rad:Double) {
-        a[0] = sin(rad)
-        a[2] = cos(rad)
-        a[8] = -cos(rad)
-        a[10] = sin(rad)
+        a[0] = cos(rad)
+        a[2] = -sin(rad)
+        a[8] = sin(rad)
+        a[10] = cos(rad)
     }
 
     func toGL() -> [GLfloat] {

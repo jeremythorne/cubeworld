@@ -48,6 +48,21 @@ enum KeyCode:Int32 {
     case Right = 262 // GLFW_KEY_RIGHT
     case Up = 265 // GLFW_KEY_UP
     case Down = 264 // GLFW_KEY_DOWN
+    case w = 87
+    case a = 65 // GLFW_KEY_A
+    case s = 83
+    case d = 68
+}
+
+var mouse_pos:Vec3? = nil
+
+func cursor_position_callback(window: Optional<OpaquePointer>, xpos:Double, ypos:Double)
+{
+    if mouse_pos == nil {
+        mouse_pos = Vec3()
+    }
+    mouse_pos!.x = xpos
+    mouse_pos!.y = ypos
 }
 
 class Game {
@@ -61,20 +76,25 @@ class Game {
     }
 }
 
+struct Camera {
+    var pos = Vec3()
+    var ax:Double = 0
+    var ay:Double = 0
+}
+ 
 class App {
 
     var width:Float = 0.0
     var height:Float = 0.0
     var world = World()
+    var mouse:Vec3?
     let near = 1.0
     let far = 32.0
     var window_o:OpaquePointer?
     var game:Game!
-    var px:Double = 0
-    var py:Double = 0
-    var pz:Double = 0
-    var pa:Double = 0
-        
+
+    var camera = Camera()
+  
     deinit
     {
         if let window = window_o {
@@ -114,6 +134,8 @@ class App {
         print("window pointer:", window)
 
         glfwSetKeyCallback(window, key_callback)
+        glfwSetCursorPosCallback(window, cursor_position_callback)
+        glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)
 
         glfwMakeContextCurrent(window)
 
@@ -159,7 +181,7 @@ class App {
     func update()
     {
         game.update()
-        world.loadChunks(x:Int(px), z:Int(pz))
+        world.loadChunks(x:Int(camera.pos.x), z:Int(camera.pos.z))
     }
 
     func draw()
@@ -167,17 +189,14 @@ class App {
         glClear(GLbitfield(GL_COLOR_BUFFER_BIT) | GLbitfield(GL_DEPTH_BUFFER_BIT))
 
         let p = Mat4(projection:(right:0.2, aspect:Double(width / height), near:near, far:far))
-        let vp = Mat4(translate:(-px, -py, -pz)) * Mat4(rotatey:pa) * p
+        let vp = Mat4(translate:(-camera.pos.x, -camera.pos.y, -camera.pos.z)) * Mat4(rotatey:camera.ay) * Mat4(rotatex:camera.ax) * p
 
         world.draw(vp:vp)
         game.draw(viewProjection:vp)
     }
 
-    func setCamera(p:Vec3, az:Double) {
-        px = p.x
-        py = p.y
-        pz = p.z
-        pa = az
+    func setCamera(_ camera:Camera) {
+        self.camera = camera
     }
     
     func keyPressed(key:KeyCode) -> Bool {
@@ -209,6 +228,7 @@ class App {
 
             glfwSwapBuffers(window)
             glfwPollEvents()
+            mouse = mouse_pos
         }
         print("finished loop")
     }
