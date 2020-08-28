@@ -81,7 +81,7 @@ class MyGame : Game {
             if moving {
                 timer += 1.0 / 60
             }
-            p.pos.y = app.mapHeight(x:p.pos.x,z:p.pos.z) + 2.5
+            p.pos.y = app.mapHeight(x:p.pos.x,z:p.pos.z) + 2.7
         }
         var camera = p
         camera.pos = camera.pos + walk.get(timer:timer)

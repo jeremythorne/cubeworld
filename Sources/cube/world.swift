@@ -70,8 +70,8 @@ var vertex_shader_text = "#version 110\n"
 + "  vec4 p = mvp * vec4(pos, 1.0);\n"
 + "  gl_Position = p;\n"
 + "  v = p.z / p.w;\n"
-+ "  vtex_coord = tex_coord / vec2(6.0, 3.0);\n"
-+ "  vsky = max(0.0, dot(normal, vec3(0.8, 0.7, 1.0)));\n"
++ "  vtex_coord = tex_coord / vec2(6.0, 4.0);\n"
++ "  vsky = 0.2 * max(0.0, dot(normal, vec3(0.8, 0.7, 1.0)));\n"
 + "}\n"
 
 var fragment_shader_text = "#version 110\n"
@@ -92,6 +92,7 @@ enum CubeType:Int {
     case grass = 1
     case stone = 2
     case water = 3
+    case sand = 4
 }
 
 struct Cube {
@@ -131,21 +132,20 @@ class Chunk {
 
         for z in 0..<16 {
             for x in 0..<16 {
-                var h = map(x + xoff, z + zoff)
-                if h < 6 {
-                    h = 6
-                }
-                for y in 0...h {
+                let h = map(x + xoff, z + zoff)
+                for y in 0...max(6, h) {
                     let t:CubeType
                     switch y {
                     case 0..<h:
                         t = .stone
                     case h:
-                        if h <= 6 {
-                            t = .water
-                        }else {
+                        if h == 6 {
+                            t = .sand
+                        } else {
                             t = .grass
                         }
+                    case (h + 1)...6:
+                        t = .water
                     default:
                         t = .sky
                     }
