@@ -1,4 +1,3 @@
-
 func noise8_2d(seed:Int, _ x:Int, _ y:Int) -> UInt8 {
     let h = seed
     var n:UInt8 = 0

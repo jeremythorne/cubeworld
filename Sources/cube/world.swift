@@ -70,7 +70,7 @@ var vertex_shader_text = "#version 110\n"
 + "  vec4 p = mvp * vec4(pos, 1.0);\n"
 + "  gl_Position = p;\n"
 + "  v = p.z / p.w;\n"
-+ "  vtex_coord = tex_coord / vec2(6.0, 4.0);\n"
++ "  vtex_coord = tex_coord / vec2(6.0, 6.0);\n"
 + "  vsky = 0.2 * max(0.0, dot(normal, vec3(0.8, 0.7, 1.0)));\n"
 + "}\n"
 
@@ -93,6 +93,8 @@ enum CubeType:Int {
     case stone = 2
     case water = 3
     case sand = 4
+    case wood = 5
+    case leaf = 6
 }
 
 struct Cube {
@@ -109,26 +111,12 @@ class Chunk {
     var zoff:Int
     var height:Int = 256
 
-    init(xoff:Int, zoff:Int, map:(Int, Int) -> Int) {
+    init(xoff:Int, zoff:Int, map:(Int, Int) -> Int,
+            trees:(Int, Int) -> [Tree]) {
         self.xoff = xoff
         self.zoff = zoff
         let sky = Cube()
         cubes = [[[Cube]]](repeating:[[Cube]](repeating:[Cube](repeating:sky, count: height), count:16), count:16)
-
-        func occluded(_ x:Int, _ y:Int, _ z:Int) -> Bool {
-            if x == 0 || x == 15 || z == 0 || z == 15 || y == 0 || y == height - 1 {
-                return false
-            }
-            if cubes[z + 1][x][y].type == .sky ||
-               cubes[z - 1][x][y].type == .sky ||
-               cubes[z][x + 1][y].type == .sky ||
-               cubes[z][x - 1][y].type == .sky ||
-               cubes[z][x][y + 1].type == .sky ||
-               cubes[z][x][y - 1].type == .sky {
-                   return false
-            }
-            return true
-        }
 
         for z in 0..<16 {
             for x in 0..<16 {
@@ -154,6 +142,44 @@ class Chunk {
             }
         }
 
+        addTrees(map, trees(xoff, zoff))
+
+        calcOcclusion()
+        makeGeometry()
+    }
+
+    func addTrees(_ map:(Int, Int) -> Int, _ trees:[Tree]) {
+        for tree in trees {
+            let h = map(tree.x, tree.z)
+            for block in tree.blocks {
+                let x = block.x + tree.x - xoff
+                let y = block.y + h
+                let z = block.z + tree.z - zoff
+                if x >= 0 && x < 16 &&
+                   z >= 0 && z < 16 && 
+                   y >= 0 && y < 256 {
+                    cubes[z][x][y].type = block.type 
+                }
+            }
+        }
+    }
+
+    func occluded(_ x:Int, _ y:Int, _ z:Int) -> Bool {
+        if x == 0 || x == 15 || z == 0 || z == 15 || y == 0 || y == height - 1 {
+            return false
+        }
+        if cubes[z + 1][x][y].type == .sky ||
+           cubes[z - 1][x][y].type == .sky ||
+           cubes[z][x + 1][y].type == .sky ||
+           cubes[z][x - 1][y].type == .sky ||
+           cubes[z][x][y + 1].type == .sky ||
+           cubes[z][x][y - 1].type == .sky {
+               return false
+        }
+        return true
+    }
+
+    func calcOcclusion() {
         for z in 0..<16 {
             for x in 0..<16 {
                 for y in 0..<height {
@@ -161,9 +187,6 @@ class Chunk {
                 }
             }
         }
-
-        makeGeometry()
-
     }
 
     func makeGeometry() {
@@ -218,6 +241,50 @@ class Chunk {
 
 }
 
+struct Tree {
+    var x:Int
+    var z:Int
+    var seed:Int
+    var height:Int {
+        return (seed >> 8) & 7 + 4
+    }
+
+    struct Block {
+        var x:Int
+        var y:Int
+        var z:Int
+        var type:CubeType
+    }
+
+    var blocks : [Block] {
+        get {
+            var blocks = [Block]()
+            for y in 0..<height {
+                blocks.append(Block(x:0, y:y, z:0, type:.wood))
+            }
+            let r = height / 3
+            for x in -r..<r {
+                for z in -r..<r {
+                    for y in -r..<r {
+                        if leaf(x, y, z) {
+                            blocks.append(Block(x:x, y:y + height, z:z, type:.leaf))
+                        }
+                    }
+                }
+            }
+            return blocks
+        }
+    }
+
+    func leaf(_ x: Int, _ y:Int, _ z:Int) -> Bool {
+        if x == 0 && z == 0 && y < 0 {
+            return false
+        }
+        let a:Int = hash(hash(hash(seed + z) + y) + x)
+        return (a & 0xff) < 150
+    }
+}
+
 struct ChunkPos : Hashable {
     var x:Int
     var z:Int
@@ -227,6 +294,8 @@ class World {
 
 
     let worldSeed = Int.random(in:1...Int.max)
+    var mapSeed:Int = 0
+    var treeSeed:Int = 0
     var program:GLuint = 0
     var pos_location:GLint = 0
     var normal_location:GLint = 0 
@@ -234,6 +303,11 @@ class World {
     var mvp_location:GLint = 0 
     var map = [[Int]]()
     var chunks = [ChunkPos:Chunk]()
+
+    init() {
+        mapSeed = hash(worldSeed)
+        treeSeed = hash(worldSeed + 1)
+    }
         
     func setup() -> Bool
     {
@@ -267,7 +341,7 @@ class World {
 
         print("program attribute locations", pos_location,tex_coord_location)
 
-        let image = loadImage(filename:"images/hello.png")!
+        let image = loadImage(filename:"images/world.png")!
         glBindTexture(GLenum(GL_TEXTURE_2D), image.texture)
         
         loadChunks(x:0, z:0)
@@ -276,7 +350,30 @@ class World {
 
     func heightMap(_ x:Int, _ z:Int) -> Int
     {
-        return Int(noise8_2d(seed: worldSeed, x / 2, z / 2) >> 3)
+        return Int(noise8_2d(seed: mapSeed, x / 2, z / 2) >> 3)
+    }
+
+    func getTrees(_ x:Int, _ z:Int) -> [Tree]
+    {
+        var trees = [Tree]()
+        for zo in (z - 9)..<(z + 24) {
+            for xo in (x - 9)..<(x + 24) {
+                let tree = getTree(xo, zo)
+                if tree != nil {
+                    trees.append(tree!)
+                }
+            }
+        }
+        return trees
+    }
+
+    func getTree(_ x:Int, _ z:Int) -> Tree?
+    {
+        let a:Int = hash(hash(treeSeed + z) + x)
+        if (a & 0xff) > 1 {
+            return nil
+        }
+        return Tree(x:x, z:z, seed:a)
     }
 
     func loadChunks(x:Int, z:Int)
@@ -288,7 +385,7 @@ class World {
                 let pos = ChunkPos(x:i, z:j)
                 if chunks[pos] == nil {
                     print("chunk \(i),\(j)")
-                    chunks[pos] = Chunk(xoff:i * 16, zoff:j * 16, map:heightMap)
+                    chunks[pos] = Chunk(xoff:i * 16, zoff:j * 16, map:heightMap, trees:getTrees)
                 }
             }
         }

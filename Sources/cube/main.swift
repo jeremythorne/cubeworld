@@ -35,9 +35,9 @@ class MyGame : Game {
         case .demo:
             p.ay += 0.01
             p.ax = -pi / 4
-            p.pos.x = 40 * cos(p.ay)
-            p.pos.z = 40 * sin(p.ay)
-            p.pos.y = 32
+            p.pos.x = -40 * sin(p.ay)
+            p.pos.z = 40 * cos(p.ay)
+            p.pos.y = 50
             if app.keyPressed(key:.Space) {
                 state = .play
                 p.pos.x = 0
