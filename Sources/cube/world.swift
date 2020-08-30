@@ -49,12 +49,12 @@ var cubeverts: [[[GLubyte]]] = [
 ]
 
 var normals: [[GLfloat]] = [
-     [ 0,  0,  1], 
-     [-1,  0,  0], 
-     [ 0,  0, -1], 
-     [ 1,  0,  0], 
-     [0,  -1,  0], 
-     [0,   1,  0], 
+     [ 0,  0,  1], // front - south
+     [-1,  0,  0], // left - west
+     [ 0,  0, -1], // back - north
+     [ 1,  0,  0], // right -east
+     [0,  -1,  0], // bottom
+     [0,   1,  0], // top 
 ]
 
 var vertex_shader_text = "#version 110\n"
