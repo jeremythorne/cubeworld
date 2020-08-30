@@ -5,33 +5,40 @@
 #endif
 
 var cubeverts: [[[GLubyte]]] = [
-     [ // front
-     [0, 0, 1,  1, 1],
-     [1, 0, 1,  0, 1], 
-     [1, 1, 1,  0, 0], 
-     [0, 1, 1,  1, 0], 
-     ], 
-
-     [ //left
-     [0, 0, 0,  2, 1],
-     [0, 0, 1,  1, 1], 
-     [0, 1, 1,  1, 0], 
-     [0, 1, 0,  2, 0], 
-     ], 
-
-     [ // back
+     [ // north
      [1, 0, 0,   3, 1],
      [0, 0, 0,   2, 1], 
      [0, 1, 0,   2, 0], 
      [1, 1, 0,   3, 0], 
      ], 
 
-     [ //right
+     [ // east
      [1, 0, 1,  4, 1],
      [1, 0, 0,  3, 1], 
      [1, 1, 0,  3, 0], 
      [1, 1, 1,  4, 0], 
      ], 
+
+     [ // south
+     [0, 0, 1,  1, 1],
+     [1, 0, 1,  0, 1], 
+     [1, 1, 1,  0, 0], 
+     [0, 1, 1,  1, 0], 
+     ], 
+
+     [ // west
+     [0, 0, 0,  2, 1],
+     [0, 0, 1,  1, 1], 
+     [0, 1, 1,  1, 0], 
+     [0, 1, 0,  2, 0], 
+     ], 
+
+     [ // top
+     [0, 1, 1,  4, 0], 
+     [1, 1, 1,  5, 0],
+     [1, 1, 0,  5, 1], 
+     [0, 1, 0,  4, 1], 
+     ],
 
      [ // bottom
      [0, 0, 0,  5, 0], 
@@ -40,21 +47,15 @@ var cubeverts: [[[GLubyte]]] = [
      [0, 0, 1,  5, 1], 
      ], 
 
-     [ //top
-     [0, 1, 1,  4, 0], 
-     [1, 1, 1,  5, 0],
-     [1, 1, 0,  5, 1], 
-     [0, 1, 0,  4, 1], 
-     ]
 ]
 
 var normals: [[GLfloat]] = [
-     [ 0,  0,  1], // front - south
-     [-1,  0,  0], // left - west
      [ 0,  0, -1], // back - north
      [ 1,  0,  0], // right -east
-     [0,  -1,  0], // bottom
+     [ 0,  0,  1], // front - south
+     [-1,  0,  0], // left - west
      [0,   1,  0], // top 
+     [0,  -1,  0], // bottom
 ]
 
 var vertex_shader_text = "#version 110\n"
@@ -87,6 +88,15 @@ var fragment_shader_text = "#version 110\n"
 + "  gl_FragColor = fog + vec4((ambient + vsky) * tex.xyz, tex.w);\n"
 + "}\n"
 
+enum Directions:Int {
+    case north = 0
+    case east = 1
+    case south = 2
+    case west = 3
+    case top = 4
+    case bottom = 5
+}
+
 enum CubeType:Int {
     case sky = 0
     case grass = 1
@@ -99,7 +109,7 @@ enum CubeType:Int {
 
 struct Cube {
     var type:CubeType = .sky
-    var occluded:Bool = false
+    var faceOcclusion:Int = 0
 }
 
 class Chunk {
@@ -164,6 +174,24 @@ class Chunk {
         }
     }
 
+    func faceOcclusion(_ x:Int, _ y:Int, _ z:Int) -> Int {
+        let occlusion:[Directions: Bool] = [
+            .north: !(z == 0 || cubes[z - 1][x][y].type == .sky),
+            .east: !(x == 15 || cubes[z][x + 1][y].type == .sky),
+            .south: !(z == 15 || cubes[z + 1][x][y].type == .sky),
+            .west: !(x == 0 || cubes[z][x - 1][y].type == .sky),
+            .top: !(y == 255 || cubes[z][x][y + 1].type == .sky),
+            .bottom: !(y == 0 || cubes[z][x][y - 1].type == .sky)
+        ]
+        var bitField:Int = 0
+        for (k, v) in occlusion {
+            if v {
+                bitField |= 1 << k.rawValue
+            }
+        }
+        return bitField
+    }
+
     func occluded(_ x:Int, _ y:Int, _ z:Int) -> Bool {
         if x == 0 || x == 15 || z == 0 || z == 15 || y == 0 || y == height - 1 {
             return false
@@ -183,7 +211,7 @@ class Chunk {
         for z in 0..<16 {
             for x in 0..<16 {
                 for y in 0..<height {
-                    cubes[z][x][y].occluded = occluded(x, y, z)
+                    cubes[z][x][y].faceOcclusion = faceOcclusion(x, y, z)
                 }
             }
         }
@@ -194,8 +222,8 @@ class Chunk {
             for x in 0..<16 {
                 for y in 0..<height {
                     let cube = cubes[z][x][y]
-                    if cube.type != .sky && !cube.occluded {
-                        addCubeVertices(x:x, y:y, z:z, type:cube.type)
+                    if cube.type != .sky && cube.faceOcclusion != 63 {
+                        addCubeVertices(x:x, y:y, z:z, occlusion:cube.faceOcclusion, type:cube.type)
                     }
                 }
             }
@@ -208,7 +236,7 @@ class Chunk {
         uploadCubeVertices()
     }
 
-    func addCubeVertices(x:Int, y:Int, z:Int, type:CubeType)
+    func addCubeVertices(x:Int, y:Int, z:Int, occlusion:Int, type:CubeType)
     {
         // vertex must fix in a byte
         assert(x >= 0 && x < 255)
@@ -216,6 +244,9 @@ class Chunk {
         assert(z >= 0 && z < 255)
         let tv = GLubyte(type.rawValue - 1)
         for i in 0..<6 {
+            if occlusion & (1 << i) != 0 {
+                continue
+            }
             var verts = [[GLubyte]]()
             for j in 0..<4 {
                 let v = cubeverts[i][j]
@@ -226,7 +257,6 @@ class Chunk {
                 bytes[i] += verts[j]
             }
         }
-        vertex_count += 6
     }
 
     func uploadCubeVertices()
@@ -236,6 +266,7 @@ class Chunk {
             glBufferData(GLenum(GL_ARRAY_BUFFER),
                          GLsizeiptr(MemoryLayout<GLbyte>.size * Int(bytes[i].count)),
                                                bytes[i], GLenum(GL_STATIC_DRAW))
+            print(i, bytes[i].count)
         }
     }
 
@@ -422,7 +453,7 @@ class World {
             glBindBuffer(GLenum(GL_ARRAY_BUFFER), chunk.vertex_buffer[i])
             enableAttrib(loc:pos_location, num:3, off:0, stride:5)
             enableAttrib(loc:tex_coord_location, num:2, off:3, stride:5)
-            glDrawArrays(GLenum(GL_TRIANGLES), 0, GLsizei(chunk.vertex_count))
+            glDrawArrays(GLenum(GL_TRIANGLES), 0, GLsizei(chunk.bytes[i].count / 5))
         }
     }
 }
