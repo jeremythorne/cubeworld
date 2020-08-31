@@ -88,15 +88,6 @@ var fragment_shader_text = "#version 110\n"
 + "  gl_FragColor = fog + vec4((ambient + vsky) * tex.xyz, tex.w);\n"
 + "}\n"
 
-enum Directions:Int {
-    case north = 0
-    case east = 1
-    case south = 2
-    case west = 3
-    case top = 4
-    case bottom = 5
-}
-
 enum CubeType:Int {
     case sky = 0
     case grass = 1
@@ -154,8 +145,6 @@ class Chunk {
 
         addTrees(map, trees(xoff, zoff))
 
-        calcOcclusion()
-        makeGeometry()
     }
 
     func addTrees(_ map:(Int, Int) -> Int, _ trees:[Tree]) {
@@ -174,50 +163,48 @@ class Chunk {
         }
     }
 
-    func faceOcclusion(_ x:Int, _ y:Int, _ z:Int) -> Int {
-        let occlusion:[Directions: Bool] = [
-            .north: !(z == 0 || cubes[z - 1][x][y].type == .sky),
-            .east: !(x == 15 || cubes[z][x + 1][y].type == .sky),
-            .south: !(z == 15 || cubes[z + 1][x][y].type == .sky),
-            .west: !(x == 0 || cubes[z][x - 1][y].type == .sky),
-            .top: !(y == 255 || cubes[z][x][y + 1].type == .sky),
-            .bottom: !(y == 0 || cubes[z][x][y - 1].type == .sky)
+    func faceOcclusion(_ x:Int, _ y:Int, _ z:Int, _ neighbours:[Chunk?]) -> Int {
+        let absx = x + xoff
+        let absz = z + zoff
+        let occlusion:[Bool] = [
+            //north
+            (z ==  0 && neighbours[0] != nil && neighbours[0]!.solid(absx, y, absz - 1)) || (z > 0  && cubes[z - 1][x][y].type != .sky),
+            // east
+            (x == 15 && neighbours[1] != nil && neighbours[1]!.solid(absx + 1, y, absz)) || (x < 15 && cubes[z][x + 1][y].type != .sky),
+            // south
+            (z == 15 && neighbours[2] != nil && neighbours[2]!.solid(absx, y, absz + 1)) || (z < 15 && cubes[z + 1][x][y].type != .sky),
+            // west
+            (x ==  0 && neighbours[3] != nil && neighbours[3]!.solid(absx - 1, y, absz)) || (x > 0  && cubes[z][x - 1][y].type != .sky),
+            // top
+            (y < 255 && cubes[z][x][y + 1].type != .sky),
+            // bottom
+            (y >   0 && cubes[z][x][y - 1].type != .sky)
         ]
         var bitField:Int = 0
-        for (k, v) in occlusion {
-            if v {
-                bitField |= 1 << k.rawValue
+        for i in 0..<6 {
+            if occlusion[i] {
+                bitField |= 1 << i
             }
         }
         return bitField
     }
 
-    func occluded(_ x:Int, _ y:Int, _ z:Int) -> Bool {
-        if x == 0 || x == 15 || z == 0 || z == 15 || y == 0 || y == height - 1 {
-            return false
-        }
-        if cubes[z + 1][x][y].type == .sky ||
-           cubes[z - 1][x][y].type == .sky ||
-           cubes[z][x + 1][y].type == .sky ||
-           cubes[z][x - 1][y].type == .sky ||
-           cubes[z][x][y + 1].type == .sky ||
-           cubes[z][x][y - 1].type == .sky {
-               return false
-        }
-        return true
+    func solid(_ absx:Int, _ absy:Int, _ absz:Int) -> Bool {
+        return cubes[absz - zoff][absx - xoff][absy].type != .sky
     }
 
-    func calcOcclusion() {
+    func calcOcclusion(neighbours:[Chunk?]) {
         for z in 0..<16 {
             for x in 0..<16 {
                 for y in 0..<height {
-                    cubes[z][x][y].faceOcclusion = faceOcclusion(x, y, z)
+                    cubes[z][x][y].faceOcclusion = faceOcclusion(x, y, z, neighbours)
                 }
             }
         }
     }
 
     func makeGeometry() {
+        bytes = [[], [], [], [], [], []]
         for z in 0..<16 {
             for x in 0..<16 {
                 for y in 0..<height {
@@ -266,7 +253,6 @@ class Chunk {
             glBufferData(GLenum(GL_ARRAY_BUFFER),
                          GLsizeiptr(MemoryLayout<GLbyte>.size * Int(bytes[i].count)),
                                                bytes[i], GLenum(GL_STATIC_DRAW))
-            print(i, bytes[i].count)
         }
     }
 
@@ -407,8 +393,18 @@ class World {
         return Tree(x:x, z:z, seed:a)
     }
 
+    func neighbours(_ pos:ChunkPos) -> [ChunkPos]
+    {
+        return [
+            ChunkPos(x:pos.x, z:pos.z - 1),
+            ChunkPos(x:pos.x + 1, z:pos.z),
+            ChunkPos(x:pos.x, z:pos.z + 1),
+            ChunkPos(x:pos.x - 1, z:pos.z)]
+     }
+
     func loadChunks(x:Int, z:Int)
     {
+        var changed = [ChunkPos:Bool]()
         let cx = x / 16
         let cz = z / 16
         for i in (cx - 2)...(cx + 2) {
@@ -417,6 +413,10 @@ class World {
                 if chunks[pos] == nil {
                     print("chunk \(i),\(j)")
                     chunks[pos] = Chunk(xoff:i * 16, zoff:j * 16, map:heightMap, trees:getTrees)
+                    changed[pos] = true
+                    for p in neighbours(pos) {
+                        changed[p] = true
+                    }
                 }
             }
         }
@@ -425,13 +425,28 @@ class World {
            for pos in chunks.keys {
                let diff = abs(cx - pos.x) + abs(cz - pos.z)
                if diff > 8 {
-                   chunks[pos] = nil
+                    chunks[pos] = nil
+                    for p in neighbours(pos) {
+                        changed[p] = true
+                    }
                }
                if chunks.count < 64 {
                    break
                }
            }
-        } 
+        }
+
+        for pos in changed.keys {
+            if let chunk = chunks[pos] {
+                let positions = neighbours(pos)
+                var neighbours = [Chunk?]()
+                for p in positions {
+                    neighbours.append(chunks[p])
+                }
+                chunk.calcOcclusion(neighbours:neighbours)
+                chunk.makeGeometry()
+            }
+        }
     }
 
     func draw(vp:Mat4)
