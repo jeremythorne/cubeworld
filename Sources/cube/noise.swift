@@ -1,7 +1,7 @@
 func noise8_2d(seed:Int, _ x:Int, _ y:Int) -> UInt8 {
     let h = seed
     var n:UInt8 = 0
-    for i in 1...4 {
+    for i in 3...4 {
         let li = x >> i
         let ti = y >> i
         let ht = hash(h + ti)

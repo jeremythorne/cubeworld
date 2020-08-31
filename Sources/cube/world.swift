@@ -367,7 +367,7 @@ class World {
 
     func heightMap(_ x:Int, _ z:Int) -> Int
     {
-        return Int(noise8_2d(seed: mapSeed, x / 2, z / 2) >> 3)
+        return Int(noise8_2d(seed: mapSeed, x, z) >> 3)
     }
 
     func getTrees(_ x:Int, _ z:Int) -> [Tree]
