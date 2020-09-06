@@ -61,10 +61,12 @@ var normals: [[GLfloat]] = [
 var vertex_shader_text = "#version 110\n"
 + "attribute vec3 pos;\n"
 + "attribute vec2 tex_coord;\n"
++ "attribute float ambient;\n"
 + "uniform vec3 normal;\n"
 + "uniform mat4 mvp;\n"
 + "varying vec2 vtex_coord;\n"
 + "varying float vsky;\n"
++ "varying float vambient;\n"
 + "varying float v;\n"
 + "void main()\n"
 + "{\n"
@@ -73,17 +75,19 @@ var vertex_shader_text = "#version 110\n"
 + "  v = p.z / p.w;\n"
 + "  vtex_coord = tex_coord / vec2(6.0, 6.0);\n"
 + "  vsky = 0.2 * max(0.0, dot(normal, vec3(0.8, 0.7, 1.0)));\n"
++ "  vambient = ambient;\n"
 + "}\n"
 
 var fragment_shader_text = "#version 110\n"
 + "varying vec2 vtex_coord;\n"
 + "varying float vsky;\n"
++ "varying float vambient;\n"
 + "varying float v;\n"
 + "uniform sampler2D image;\n"
 + "void main()\n"
 + "{\n"
 + "  vec4 tex = texture2D(image, vtex_coord);\n"
-+ "  vec3 ambient = vec3(0.2, 0.2, 0.2);\n"
++ "  vec3 ambient = vec3(vambient);\n"
 + "  vec4 fog = vec4(vec3(v), 0.0);\n"
 + "  gl_FragColor = fog + vec4((ambient + vsky) * tex.xyz, tex.w);\n"
 + "}\n"
@@ -207,10 +211,13 @@ class Chunk {
         bytes = [[], [], [], [], [], []]
         for z in 0..<16 {
             for x in 0..<16 {
-                for y in 0..<height {
+                var ceil = false
+                for y in (0..<height).reversed() {
                     let cube = cubes[z][x][y]
                     if cube.type != .sky && cube.faceOcclusion != 63 {
-                        addCubeVertices(x:x, y:y, z:z, occlusion:cube.faceOcclusion, type:cube.type)
+                        let ambient = ceil ? 0.1 : 0.2
+                        ceil = true
+                        addCubeVertices(x:x, y:y, z:z, occlusion:cube.faceOcclusion, type:cube.type, ambient:ambient)
                     }
                 }
             }
@@ -223,13 +230,14 @@ class Chunk {
         uploadCubeVertices()
     }
 
-    func addCubeVertices(x:Int, y:Int, z:Int, occlusion:Int, type:CubeType)
+    func addCubeVertices(x:Int, y:Int, z:Int, occlusion:Int, type:CubeType, ambient:Double)
     {
         // vertex must fix in a byte
         assert(x >= 0 && x < 255)
         assert(y >= 0 && y < 255)
         assert(z >= 0 && z < 255)
         let tv = GLubyte(type.rawValue - 1)
+        let gambient = GLubyte(ambient * 255)
         for i in 0..<6 {
             if occlusion & (1 << i) != 0 {
                 continue
@@ -237,7 +245,7 @@ class Chunk {
             var verts = [[GLubyte]]()
             for j in 0..<4 {
                 let v = cubeverts[i][j]
-                verts.append([v[0] + GLubyte(x), v[1] + GLubyte(y), v[2] + GLubyte(z), v[3], v[4] + tv])
+                verts.append([v[0] + GLubyte(x), v[1] + GLubyte(y), v[2] + GLubyte(z), v[3], v[4] + tv, gambient])
             }
 
             for j in [0, 1, 2, 0, 2, 3] {
@@ -317,6 +325,7 @@ class World {
     var pos_location:GLint = 0
     var normal_location:GLint = 0 
     var tex_coord_location:GLint = 0
+    var ambient_location:GLint = 0
     var mvp_location:GLint = 0 
     var map = [[Int]]()
     var chunks = [ChunkPos:Chunk]()
@@ -353,6 +362,7 @@ class World {
 
         pos_location = GLint(glGetAttribLocation(program, "pos"))
         tex_coord_location = GLint(glGetAttribLocation(program, "tex_coord"))
+        ambient_location = GLint(glGetAttribLocation(program, "ambient"))
         normal_location = GLint(glGetUniformLocation(program, "normal"))
         mvp_location = GLint(glGetUniformLocation(program, "mvp")) 
 
@@ -466,9 +476,10 @@ class World {
         for i in 0..<6 {
             glUniform3fv(normal_location, 1, normals[i])
             glBindBuffer(GLenum(GL_ARRAY_BUFFER), chunk.vertex_buffer[i])
-            enableAttrib(loc:pos_location, num:3, off:0, stride:5)
-            enableAttrib(loc:tex_coord_location, num:2, off:3, stride:5)
-            glDrawArrays(GLenum(GL_TRIANGLES), 0, GLsizei(chunk.bytes[i].count / 5))
+            enableAttrib(loc:pos_location, num:3, off:0, stride:6)
+            enableAttrib(loc:tex_coord_location, num:2, off:3, stride:6)
+            enableAttrib(loc:ambient_location, num:1, off:5, stride:6, normalised:true)
+            glDrawArrays(GLenum(GL_TRIANGLES), 0, GLsizei(chunk.bytes[i].count / 6))
         }
     }
 }
