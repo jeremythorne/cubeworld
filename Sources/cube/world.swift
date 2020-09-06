@@ -417,8 +417,8 @@ class World {
         var changed = [ChunkPos:Bool]()
         let cx = x / 16
         let cz = z / 16
-        for i in (cx - 2)...(cx + 2) {
-            for j in (cz - 2)...(cz + 2) {
+        for i in (cx - 3)...(cx + 3) {
+            for j in (cz - 3)...(cz + 3) {
                 let pos = ChunkPos(x:i, z:j)
                 if chunks[pos] == nil {
                     print("chunk \(i),\(j)")
@@ -431,16 +431,16 @@ class World {
             }
         }
 
-        if chunks.count > 64 {
+        if chunks.count > 81 {
            for pos in chunks.keys {
                let diff = abs(cx - pos.x) + abs(cz - pos.z)
-               if diff > 8 {
+               if diff > 9 {
                     chunks[pos] = nil
                     for p in neighbours(pos) {
                         changed[p] = true
                     }
                }
-               if chunks.count < 64 {
+               if chunks.count < 81 {
                    break
                }
            }
